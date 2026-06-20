@@ -1,0 +1,10 @@
+[project]
+name = "03-deepagents"
+version = "0.1.0"
+description = "Deep Agents + LangChain + OpenAI — learning project"
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents",
+    "langchain-openai>=0.3.0",
+    "python-dotenv>=1.0.0",
+]
