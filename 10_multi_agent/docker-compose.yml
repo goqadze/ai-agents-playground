@@ -1,0 +1,21 @@
+services:
+  backend:
+    build: ./backend
+    container_name: multiagent_backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app   # hot-reload on file changes
+
+  frontend:
+    build: ./frontend
+    container_name: multiagent_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
