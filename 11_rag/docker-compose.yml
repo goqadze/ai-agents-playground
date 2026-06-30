@@ -1,0 +1,10 @@
+services:
+  backend:
+    build: .
+    container_name: rag_backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app   # hot-reload on file changes

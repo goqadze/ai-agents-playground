@@ -1,0 +1,93 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag_postgres
+    environment:
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d ragdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langgraph-server:
+    build: ./langgraph-server
+    container_name: rag_langgraph
+    environment:
+      # Used by langgraph dev for thread/checkpoint storage
+      POSTGRES_URI: postgresql://raguser:ragpass@postgres:5432/ragdb
+      # Used by our graph code for pgvector
+      DATABASE_URL: postgresql+psycopg://raguser:ragpass@postgres:5432/ragdb
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Optional: enable LangSmith tracing if you have an API key
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      # Allow the React frontend to call this server
+      LANGGRAPH_CORS_ALLOW_ORIGINS: '["http://localhost:3000"]'
+    ports:
+      - "8123:8123"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Mount source so code changes don't require a rebuild
+      - ./langgraph-server:/deps/__outer_rag_agent
+
+  ingest-api:
+    build: ./ingest-api
+    container_name: rag_ingest
+    environment:
+      DATABASE_URL: postgresql+psycopg://raguser:ragpass@postgres:5432/ragdb
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./ingest-api:/app
+
+  frontend:
+    build: ./frontend
+    container_name: rag_frontend
+    environment:
+      VITE_LANGGRAPH_URL: http://localhost:8123
+      VITE_INGEST_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - langgraph-server
+      - ingest-api
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rag_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  pgadmin_data:
